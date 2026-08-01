@@ -39,7 +39,7 @@
   "license": "MIT",
   "dependencies": {
     "@tursodatabase/api": "^2.0.2",
-    "@tursodatabase/serverless": "^1.2.0-pre.2"
+    "@tursodatabase/serverless": "^1.4.0"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

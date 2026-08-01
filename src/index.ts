@@ -106,7 +106,7 @@ export class TursoDatabase {
   }
 
   async query(sql: string, params?: unknown[]): Promise<QueryResult> {
-    const result = await this.conn.execute(sql, params ?? []);
+    const [result] = await this.conn.batch([{ sql, args: params ?? [] }], { raw: true });
     return {
       columns: result.columns,
       rows: result.rows.map((row: unknown[]) => [...row]),
@@ -114,7 +114,7 @@ export class TursoDatabase {
   }
 
   async execute(sql: string, params?: unknown[]): Promise<void> {
-    await this.conn.execute(sql, params ?? []);
+    await this.conn.run(sql, params ?? []);
   }
 
   async close(): Promise<void> {
