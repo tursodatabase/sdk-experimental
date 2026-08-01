@@ -38,17 +38,12 @@
 Name a database and start querying &mdash; it's provisioned the first time you touch it:
 
 ```ts
-import { openDb, table, integer, text } from "@tursodatabase/auto";
+import { openDb } from "@tursodatabase/auto";
 
-// Declare the schema once — applied to every database automatically.
-const schema = {
-  memories: table({ id: integer().primaryKey(), content: text() }),
-};
+// One database per agent — provisioned on first use.
+const db = await openDb(`agent-${agentId}`);
 
-// One database per agent — provisioned and migrated on first use.
-const db = await openDb(`agent-${agentId}`, { schema });
-
-// `memories` already exists — just use it.
+await db.execute("CREATE TABLE IF NOT EXISTS memories (content TEXT NOT NULL)");
 await db.execute(
   "INSERT INTO memories (content) VALUES (?)",
   ["User prefers concise answers."],
@@ -124,7 +119,7 @@ console.log(result.rows);
 
 ## API Reference
 
-See the [Manual](MANUAL.md) for the full API reference &mdash; `openDb` and its options, encryption, `db.query`, `db.execute`, `db.close` &mdash; and how schema migrations work.
+See the [Manual](MANUAL.md) for the full API reference &mdash; `openDb` and its options, encryption, `db.query`, `db.execute`, and `db.close`.
 
 ## Documentation
 
