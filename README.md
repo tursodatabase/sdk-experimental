@@ -38,29 +38,27 @@
 Name a database and start querying &mdash; it's provisioned the first time you touch it:
 
 ```ts
-import { openDb } from "@tursodatabase/sdk-experimental";
+import { resolve } from "@tursodatabase/sdk-experimental";
+import { connect } from "@tursodatabase/serverless";
 
 // One database per agent — provisioned on first use.
-const db = await openDb(`agent-${agentId}`);
+const db = connect(await resolve(`agent-${agentId}`));
 
-await db.execute("CREATE TABLE IF NOT EXISTS memories (content TEXT NOT NULL)");
-await db.execute(
-  "INSERT INTO memories (content) VALUES (?)",
-  ["User prefers concise answers."],
-);
+await db.exec("CREATE TABLE IF NOT EXISTS memories (content TEXT NOT NULL)");
+await db.run("INSERT INTO memories (content) VALUES (?)", "User prefers concise answers.");
 ```
 
 ## Features
 
 - **Zero-config provisioning** &mdash; Databases are created on first use. No dashboards, no setup steps.
 - **A database for everyone** &mdash; Give every user, agent, or tenant their own database. Lightweight enough to multiply into millions.
-- **Runs anywhere** &mdash; Connects to Turso over HTTP using only `fetch()` &mdash; serverless, edge, or long-running runtimes, with no native bindings.
+- **Bring your own driver** &mdash; `resolve()` returns a config you pass straight to `connect()` from [`@tursodatabase/serverless`](https://www.npmjs.com/package/@tursodatabase/serverless), an ORM, or any libsql-compatible client.
 - **Cloud or BYOC** &mdash; Works against Turso Cloud or your own infrastructure (Bring Your Own Cloud).
 
 ## Install
 
 ```bash
-npm install @tursodatabase/sdk-experimental
+npm install @tursodatabase/sdk-experimental @tursodatabase/serverless
 ```
 
 ## Setup
@@ -92,13 +90,14 @@ All databases are scoped to the configured group. You can create as many databas
 ## Quickstart
 
 ```ts
-import { openDb } from "@tursodatabase/sdk-experimental";
+import { resolve } from "@tursodatabase/sdk-experimental";
+import { connect } from "@tursodatabase/serverless";
 
 // One database per tenant — provisioned automatically on first use.
-const db = await openDb(`tenant-${tenantId}`);
+const db = connect(await resolve(`tenant-${tenantId}`));
 
 // Create tables
-await db.execute(`
+await db.exec(`
   CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
@@ -107,19 +106,21 @@ await db.execute(`
 `);
 
 // Insert data
-await db.execute(
+await db.run(
   "INSERT INTO users (name, email) VALUES (?, ?)",
-  ["Alice", "alice@example.com"]
+  "Alice", "alice@example.com"
 );
 
 // Query data
-const result = await db.query("SELECT * FROM users");
-console.log(result.rows);
+const users = await db.all("SELECT * FROM users");
+console.log(users);
 ```
+
+Everything after `connect()` is the [`@tursodatabase/serverless`](https://www.npmjs.com/package/@tursodatabase/serverless) SDK &mdash; prepared statements, batches, and transactions all work as documented there.
 
 ## API Reference
 
-See the [Manual](MANUAL.md) for the full API reference &mdash; `openDb` and its options, encryption, `db.query`, `db.execute`, and `db.close`.
+See the [Manual](MANUAL.md) for the full API reference &mdash; `resolve` and its options, including encryption.
 
 ## Documentation
 
