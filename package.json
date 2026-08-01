@@ -1,5 +1,5 @@
 {
-  "name": "@tursodatabase/auto",
+  "name": "@tursodatabase/sdk-experimental",
   "version": "0.1.0",
   "description": "Zero-config Turso database provisioning — a database for every user, agent, and tenant, on Turso Cloud or BYOC.",
   "type": "module",
