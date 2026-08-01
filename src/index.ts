@@ -1,14 +1,8 @@
 import { createClient } from "@tursodatabase/api";
-import { connect, type Connection } from "@tursodatabase/serverless";
 
 // ============================================================================
 // Types
 // ============================================================================
-
-export interface QueryResult {
-  columns: string[];
-  rows: unknown[][];
-}
 
 /** Cipher used to encrypt the database at rest. */
 export type EncryptionCipher =
@@ -37,15 +31,27 @@ export interface EncryptionOptions {
   cipher?: EncryptionCipher;
 }
 
-export interface DatabaseOptions {
+export interface ResolveOptions {
   /** Provision the database if it does not already exist. Default: true. */
   create?: boolean;
   /**
    * Encrypt the database at rest with a key you control. Provisions the
-   * database as encrypted on first use, and supplies the key on every query.
-   * Opening an existing encrypted database without the matching key fails.
+   * database as encrypted on first use. The key is included in the resolved
+   * config as `remoteEncryptionKey` so drivers supply it on every query;
+   * opening an existing encrypted database without the matching key fails.
    */
   encryption?: EncryptionOptions;
+}
+
+/**
+ * Where a database lives and how to talk to it. Shaped so it can be passed
+ * directly to a driver, e.g. `connect()` from `@tursodatabase/serverless`.
+ */
+export interface DatabaseConfig {
+  url: string;
+  authToken: string;
+  /** Present when the database is encrypted at rest. */
+  remoteEncryptionKey?: string;
 }
 
 const DEFAULT_CIPHER: EncryptionCipher = "aes256gcm";
@@ -59,102 +65,26 @@ interface CreateOptions {
   };
 }
 
-interface Credentials {
-  url: string;
-  authToken: string;
-}
-
 // ============================================================================
 // State
 // ============================================================================
-
-const instances = new Map<string, Promise<TursoDatabase>>();
-const credentials = new Map<string, Credentials>();
 
 let apiClient: ReturnType<typeof createClient> | null = null;
 let apiClientOrg: string | null = null;
 let cachedGroupToken: { group: string; jwt: string } | null = null;
 
 // ============================================================================
-// Database Class
-// ============================================================================
-
-export class TursoDatabase {
-  readonly name: string;
-  private conn: Connection;
-
-  private constructor(name: string, conn: Connection) {
-    this.name = name;
-    this.conn = conn;
-  }
-
-  static open(
-    name: string,
-    url: string,
-    authToken: string,
-    encryptionKey?: string,
-  ): TursoDatabase {
-    return new TursoDatabase(name, connect({ url, authToken, remoteEncryptionKey: encryptionKey }));
-  }
-
-  /**
-   * The underlying serverless connection. Use this as an escape hatch for
-   * anything the high-level API does not cover, or for plugging in Drizzle.
-   */
-  get connection(): Connection {
-    return this.conn;
-  }
-
-  async query(sql: string, params?: unknown[]): Promise<QueryResult> {
-    const [result] = await this.conn.batch([{ sql, args: params ?? [] }], { raw: true });
-    return {
-      columns: result.columns,
-      rows: result.rows.map((row: unknown[]) => [...row]),
-    };
-  }
-
-  async execute(sql: string, params?: unknown[]): Promise<void> {
-    await this.conn.run(sql, params ?? []);
-  }
-
-  async close(): Promise<void> {
-    instances.delete(this.name);
-    await this.conn.close();
-  }
-}
-
-// ============================================================================
 // Public API
 // ============================================================================
 
-export function openDb(name: string, options?: DatabaseOptions): Promise<TursoDatabase> {
-  const existing = instances.get(name);
-  if (existing) return existing;
-
-  const promise = initDb(name, options);
-  instances.set(name, promise);
-  promise.catch(() => instances.delete(name));
-
-  return promise;
-}
-
-// ============================================================================
-// Internals
-// ============================================================================
-
-async function initDb(name: string, options?: DatabaseOptions): Promise<TursoDatabase> {
-  const creds = await ensureDb(name, options?.create !== false, options?.encryption);
-  return TursoDatabase.open(name, creds.url, creds.authToken, options?.encryption?.key);
-}
-
-async function ensureDb(
+/**
+ * Resolve a database name to its location and credentials, provisioning the
+ * database in the configured group if it does not already exist.
+ */
+export async function resolve(
   name: string,
-  create: boolean,
-  encryption?: EncryptionOptions,
-): Promise<Credentials> {
-  const cached = credentials.get(name);
-  if (cached) return cached;
-
+  options: ResolveOptions = {},
+): Promise<DatabaseConfig> {
   const client = getClient();
   const group = requireEnv("TURSO_GROUP");
   let db: { hostname?: string } | undefined;
@@ -162,20 +92,23 @@ async function ensureDb(
   try {
     db = await client.databases.get(name);
   } catch (err) {
-    if (isNotFound(err)) {
-      if (!create) {
-        throw new Error(`Database "${name}" does not exist (pass { create: true } to provision it)`);
-      }
-      const createOptions: CreateOptions = { group };
-      if (encryption) {
-        createOptions.remote_encryption = {
-          encryption_key: encryption.key,
-          encryption_cipher: encryption.cipher ?? DEFAULT_CIPHER,
-        };
-      }
+    if (!isStatus(err, 404)) throw err;
+    if (options.create === false) {
+      throw new Error(`Database "${name}" does not exist`);
+    }
+    const createOptions: CreateOptions = { group };
+    if (options.encryption) {
+      createOptions.remote_encryption = {
+        encryption_key: options.encryption.key,
+        encryption_cipher: options.encryption.cipher ?? DEFAULT_CIPHER,
+      };
+    }
+    try {
       db = await client.databases.create(name, createOptions);
-    } else {
-      throw err;
+    } catch (err) {
+      // Lost a creation race; the database exists now.
+      if (!isStatus(err, 409)) throw err;
+      db = await client.databases.get(name);
     }
   }
 
@@ -188,11 +121,20 @@ async function ensureDb(
     cachedGroupToken = { group, jwt: token.jwt };
   }
 
-  const creds: Credentials = { url: `libsql://${db.hostname}`, authToken: cachedGroupToken.jwt };
-  credentials.set(name, creds);
+  const config: DatabaseConfig = {
+    url: `libsql://${db.hostname}`,
+    authToken: cachedGroupToken.jwt,
+  };
+  if (options.encryption) {
+    config.remoteEncryptionKey = options.encryption.key;
+  }
 
-  return creds;
+  return config;
 }
+
+// ============================================================================
+// Internals
+// ============================================================================
 
 function getClient(): ReturnType<typeof createClient> {
   const org = requireEnv("TURSO_ORG");
@@ -211,6 +153,6 @@ function requireEnv(name: string): string {
   return value;
 }
 
-function isNotFound(err: unknown): boolean {
-  return err instanceof Error && "status" in err && (err as { status: number }).status === 404;
+function isStatus(err: unknown, status: number): boolean {
+  return err instanceof Error && "status" in err && (err as { status: number }).status === status;
 }
