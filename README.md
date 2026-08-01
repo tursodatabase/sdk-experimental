@@ -28,9 +28,9 @@
       <img src="https://img.shields.io/discord/933071162680958986?color=0F624B" alt="Discord" />
     </picture>
   </a>
-  <a href="https://www.npmjs.com/package/@tursodatabase/auto">
+  <a href="https://www.npmjs.com/package/@tursodatabase/sdk-experimental">
     <picture>
-      <img src="https://img.shields.io/npm/v/@tursodatabase/auto?color=0F624B" alt="npm version" />
+      <img src="https://img.shields.io/npm/v/@tursodatabase/sdk-experimental?color=0F624B" alt="npm version" />
     </picture>
   </a>
 </p>
@@ -38,7 +38,7 @@
 Name a database and start querying &mdash; it's provisioned the first time you touch it:
 
 ```ts
-import { openDb } from "@tursodatabase/auto";
+import { openDb } from "@tursodatabase/sdk-experimental";
 
 // One database per agent — provisioned on first use.
 const db = await openDb(`agent-${agentId}`);
@@ -60,7 +60,7 @@ await db.execute(
 ## Install
 
 ```bash
-npm install @tursodatabase/auto
+npm install @tursodatabase/sdk-experimental
 ```
 
 ## Setup
@@ -92,7 +92,7 @@ All databases are scoped to the configured group. You can create as many databas
 ## Quickstart
 
 ```ts
-import { openDb } from "@tursodatabase/auto";
+import { openDb } from "@tursodatabase/sdk-experimental";
 
 // One database per tenant — provisioned automatically on first use.
 const db = await openDb(`tenant-${tenantId}`);

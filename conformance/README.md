@@ -1,6 +1,6 @@
 # Conformance tests
 
-Live tests that exercise `@tursodatabase/auto` against the real Turso API:
+Live tests that exercise `@tursodatabase/sdk-experimental` against the real Turso API:
 provision a database on first use, create a table, write, and read back.
 
 These tests **create and delete a real database** in the configured group on
